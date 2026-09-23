@@ -1,0 +1,42 @@
+<?php
+
+namespace App\Http\Controllers\Petugas;
+
+use App\Http\Controllers\Controller;
+use App\Models\DamageReport;
+use App\Models\Facility;
+use App\Models\Reservation;
+use Carbon\Carbon;
+use Illuminate\View\View;
+
+class PetugasDashboardController extends Controller
+{
+    public function index(): View
+    {
+        $today = Carbon::today()->format('Y-m-d');
+
+        $stats = [
+            'pending_reservations' => Reservation::where('status', 'menunggu')->count(),
+            'today_approved_reservations' => Reservation::where('reservation_date', $today)->where('status', 'disetujui')->count(),
+            'pending_reports' => DamageReport::where('status', 'baru')->count(),
+            'in_progress_reports' => DamageReport::where('status', 'diproses')->count(),
+            'maintenance_facilities' => Facility::where('status', 'dalam_perbaikan')->count(),
+            'total_facilities' => Facility::where('status', '!=', 'nonaktif')->count(),
+        ];
+
+        $pendingReservations = Reservation::with(['user', 'facility'])
+            ->where('status', 'menunggu')
+            ->orderBy('reservation_date', 'asc')
+            ->orderBy('start_time', 'asc')
+            ->take(5)
+            ->get();
+
+        $urgentReports = DamageReport::with(['user', 'facility'])
+            ->whereIn('status', ['baru', 'diproses'])
+            ->latest()
+            ->take(5)
+            ->get();
+
+        return view('petugas.dashboard', compact('stats', 'pendingReservations', 'urgentReports'));
+    }
+}
