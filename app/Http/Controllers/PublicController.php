@@ -9,8 +9,19 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * PublicController
+ *
+ * Terkait User Story:
+ * - US 1: Menampilkan daftar fasilitas dan status ketersediaan per slot waktu 30 menit (tanpa detail pemohon/tujuan)
+ * - US 2: Pencarian dan filter fasilitas berdasarkan tipe, lokasi, dan kapasitas
+ */
 class PublicController extends Controller
 {
+    /**
+     * Halaman beranda utama publik
+     * US 1 & US 2: Ikhtisar statistik dan katalog fasilitas
+     */
     public function index(): View
     {
         $stats = [
@@ -30,28 +41,36 @@ class PublicController extends Controller
         return view('public.home', compact('stats', 'featuredFacilities'));
     }
 
+    /**
+     * Katalog dan Pencarian Fasilitas Kampus
+     * US 2: Pengunjung/pengguna dapat mencari fasilitas berdasarkan tipe, lokasi, dan kapasitas
+     */
     public function facilities(Request $request): View
     {
         $query = Facility::where('status', '!=', 'nonaktif');
 
+        // US 2: Pencarian kata kunci nama, kode, lokasi, atau deskripsi
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%")
-                  ->orWhere('location', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('code', 'like', "%{$search}%")
+                    ->orWhere('location', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
+        // US 2: Filter berdasarkan tipe fasilitas
         if ($request->filled('type') && $request->type !== 'all') {
             $query->where('type', $request->type);
         }
 
+        // US 2: Filter berdasarkan lokasi
         if ($request->filled('location')) {
             $query->where('location', 'like', "%{$request->location}%");
         }
 
+        // US 2: Filter berdasarkan kapasitas minimum
         if ($request->filled('min_capacity')) {
             $query->where('capacity', '>=', (int) $request->min_capacity);
         }
@@ -70,6 +89,11 @@ class PublicController extends Controller
         return view('public.facilities', compact('facilities', 'locations', 'types'));
     }
 
+    /**
+     * Jadwal dan Ketersediaan Fasilitas per Slot Waktu
+     * US 1: Melihat status ketersediaan per slot waktu 30 menit (tersedia/tidak tersedia)
+     *       tanpa menampilkan informasi identitas pemohon atau tujuan kegiatan
+     */
     public function schedule(Request $request, ReservationService $reservationService): View
     {
         $selectedDate = $request->get('date', Carbon::today()->format('Y-m-d'));
@@ -88,6 +112,7 @@ class PublicController extends Controller
         }
 
         if ($selectedFacility) {
+            // US 1: Menghasilkan status slot tanpa menyertakan user pemohon/tujuan
             $slots = $reservationService->getDailySlots($selectedFacility, $selectedDate);
         }
 

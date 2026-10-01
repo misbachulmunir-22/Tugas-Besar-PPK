@@ -8,12 +8,21 @@ use App\Models\Facility;
 use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * RekapExportController (Admin)
+ *
+ * Terkait User Story:
+ * - US 17: Admin melihat dan mengekspor (CSV/Excel/PDF) rekap okupansi fasilitas dan frekuensi kerusakan per fasilitas/lokasi
+ */
 class RekapExportController extends Controller
 {
+    /**
+     * Halaman Rekapitulasi Okupansi & Frekuensi Kerusakan
+     * US 17: Admin melihat tabel rekap okupansi (total reservasi & total jam) dan frekuensi kerusakan per fasilitas/lokasi
+     */
     public function index(Request $request): View
     {
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -26,6 +35,10 @@ class RekapExportController extends Controller
         return view('admin.reports.rekap', compact('rekapData', 'startDate', 'endDate', 'locations', 'locationFilter'));
     }
 
+    /**
+     * Ekspor Rekapitulasi ke Format CSV / Excel
+     * US 17: Ekspor CSV berformat UTF-8 BOM untuk pembacaan akurat di Microsoft Excel
+     */
     public function exportCsv(Request $request): StreamedResponse
     {
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -34,7 +47,7 @@ class RekapExportController extends Controller
 
         $rekapData = $this->calculateRekapData($startDate, $endDate, $locationFilter);
 
-        $filename = 'Rekap_Okupansi_dan_Kerusakan_Fasilitas_' . date('Ymd_His') . '.csv';
+        $filename = 'Rekap_Okupansi_dan_Kerusakan_Fasilitas_'.date('Ymd_His').'.csv';
 
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
@@ -50,7 +63,7 @@ class RekapExportController extends Controller
             fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, ['REKAP OKUPANSI & FREKUENSI KERUSAKAN FASILITAS KAMPUS']);
-            fputcsv($handle, ['Periode:', $startDate . ' s/d ' . $endDate]);
+            fputcsv($handle, ['Periode:', $startDate.' s/d '.$endDate]);
             fputcsv($handle, ['Tanggal Cetak:', Carbon::now()->format('d/m/Y H:i:s')]);
             fputcsv($handle, []); // Baris kosong
 
@@ -109,6 +122,10 @@ class RekapExportController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    /**
+     * Tampilan Cetak Laporan PDF / Print Preview
+     * US 17: Mencetak dan mengekspor rekap dalam format PDF siap cetak
+     */
     public function printPdf(Request $request): View
     {
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -120,6 +137,10 @@ class RekapExportController extends Controller
         return view('admin.reports.print', compact('rekapData', 'startDate', 'endDate', 'locationFilter'));
     }
 
+    /**
+     * Menghitung data okupansi dan frekuensi kerusakan fasilitas
+     * US 17: Agregasi data durasi pemakaian (jam) dan jumlah perbaikan
+     */
     protected function calculateRekapData(string $startDate, string $endDate, ?string $location = null): array
     {
         $query = Facility::query();
@@ -138,7 +159,7 @@ class RekapExportController extends Controller
         $totalInProgressAll = 0;
 
         foreach ($facilities as $facility) {
-            // Ambil reservasi disetujui dalam rentang tanggal
+            // US 17: Ambil reservasi disetujui dalam rentang tanggal
             $reservations = Reservation::where('facility_id', $facility->id)
                 ->where('status', 'disetujui')
                 ->whereBetween('reservation_date', [$startDate, $endDate])
@@ -151,11 +172,11 @@ class RekapExportController extends Controller
                 $totalHours += $start->diffInMinutes($end) / 60;
             }
 
-            // Ambil laporan kerusakan dalam rentang tanggal
+            // US 17: Ambil laporan kerusakan dalam rentang tanggal
             $reports = DamageReport::where('facility_id', $facility->id)
                 ->whereBetween('created_at', [
                     Carbon::parse($startDate)->startOfDay(),
-                    Carbon::parse($endDate)->endOfDay()
+                    Carbon::parse($endDate)->endOfDay(),
                 ])
                 ->get();
 
