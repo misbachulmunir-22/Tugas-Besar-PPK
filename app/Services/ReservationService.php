@@ -7,10 +7,19 @@ use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Layanan ReservationService
+ *
+ * Terkait User Story:
+ * - US 1: Menghitung ketersediaan per slot waktu 30 menit tanpa mengekspos identitas pemohon ke publik
+ * - US 3: Validasi aturan rentang waktu slot 30 menit dan jam operasional kampus 07:00 - 20:00
+ * - US 9: Deteksi dan pencegahan bentrok jadwal reservasi otomatis
+ */
 class ReservationService
 {
     /**
      * Validasi aturan waktu 30 menit dan jam operasional 07:00 - 20:00
+     * US 3: Pengguna mengajukan reservasi pada rentang waktu operasional yang valid
      */
     public function validateTimeSlot(string $startTime, string $endTime): void
     {
@@ -37,7 +46,7 @@ class ReservationService
         $startMinute = (int) $start->format('i');
         $endMinute = (int) $end->format('i');
 
-        if (!in_array($startMinute, [0, 30]) || !in_array($endMinute, [0, 30])) {
+        if (! in_array($startMinute, [0, 30]) || ! in_array($endMinute, [0, 30])) {
             throw ValidationException::withMessages([
                 'start_time' => 'Waktu mulai dan selesai wajib merupakan kelipatan slot 30 menit (:00 atau :30).',
             ]);
@@ -53,6 +62,8 @@ class ReservationService
 
     /**
      * Cek apakah terjadi bentrok jadwal dengan reservasi yang sudah disetujui
+     * US 9: Mencegah persetujuan reservasi yang bentrok jadwal pada fasilitas yang sama
+     * US 3: Pengecekan saat pengajuan reservasi oleh pengguna
      */
     public function hasConflict(int $facilityId, string $date, string $startTime, string $endTime, ?int $excludeReservationId = null): bool
     {
@@ -60,11 +71,11 @@ class ReservationService
         $end = substr($endTime, 0, 5);
 
         $query = Reservation::where('facility_id', $facilityId)
-            ->where('reservation_date', $date)
+            ->whereDate('reservation_date', $date)
             ->where('status', 'disetujui')
             ->where(function ($q) use ($start, $end) {
                 $q->where('start_time', '<', $end)
-                  ->where('end_time', '>', $start);
+                    ->where('end_time', '>', $start);
             });
 
         if ($excludeReservationId) {
@@ -76,6 +87,7 @@ class ReservationService
 
     /**
      * Mendapatkan daftar slot 30 menit beserta status ketersediaannya (untuk grid/kalender publik)
+     * US 1: Menampilkan status ketersediaan tanpa menampilkan data pemohon atau tujuan ke publik
      */
     public function getDailySlots(Facility $facility, string $date): array
     {
@@ -85,13 +97,13 @@ class ReservationService
 
         // Ambil semua reservasi disetujui pada tanggal tersebut
         $approvedReservations = Reservation::where('facility_id', $facility->id)
-            ->where('reservation_date', $date)
+            ->whereDate('reservation_date', $date)
             ->where('status', 'disetujui')
             ->get();
 
-        // Ambil semua reservasi pending untuk info internal jika diperlukan
+        // Ambil semua reservasi pending untuk info internal
         $pendingReservations = Reservation::where('facility_id', $facility->id)
-            ->where('reservation_date', $date)
+            ->whereDate('reservation_date', $date)
             ->where('status', 'menunggu')
             ->get();
 
@@ -114,7 +126,7 @@ class ReservationService
             }
 
             $isPending = false;
-            if (!$isBooked) {
+            if (! $isBooked) {
                 foreach ($pendingReservations as $res) {
                     $resStart = substr($res->start_time, 0, 5);
                     $resEnd = substr($res->end_time, 0, 5);
@@ -137,8 +149,9 @@ class ReservationService
                 $status = 'pending';
             }
 
+            // US 1: Hanya data slot waktu dan status publik (tanpa nama pemohon/tujuan)
             $slots[] = [
-                'time_range' => $slotStartStr . ' - ' . $slotEndStr,
+                'time_range' => $slotStartStr.' - '.$slotEndStr,
                 'start_time' => $slotStartStr,
                 'end_time' => $slotEndStr,
                 'status' => $status,

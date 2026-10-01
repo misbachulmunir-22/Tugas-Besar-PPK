@@ -9,8 +9,19 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
+/**
+ * AuthController
+ *
+ * Terkait User Story:
+ * - US 13: Menolak pendaftaran petugas secara mandiri (hanya admin yang dapat mendaftarkan petugas)
+ * - US 14: Pengguna didaftarkan langsung oleh Admin / melalui alur mandiri jika diaktifkan
+ * - US 15: Memeriksa verifikasi akun hasil registrasi mandiri sebelum diizinkan login
+ */
 class AuthController extends Controller
 {
+    /**
+     * Menampilkan form login
+     */
     public function showLogin(): View|RedirectResponse
     {
         if (Auth::check()) {
@@ -20,6 +31,10 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
+    /**
+     * Proses autentikasi login
+     * US 15: Validasi status akun (pending/rejected/verified) sebelum mengizinkan login
+     */
     public function login(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
@@ -34,7 +49,7 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $user = Auth::user();
 
-            // Cek status verifikasi jika role adalah pengguna
+            // US 15: Cek status verifikasi jika role adalah pengguna
             if ($user->role === 'pengguna' && $user->status !== 'verified') {
                 Auth::logout();
                 $request->session()->invalidate();
@@ -45,13 +60,15 @@ class AuthController extends Controller
                 }
 
                 if ($user->status === 'rejected') {
-                    $reason = $user->rejection_reason ? ' Alasan: ' . $user->rejection_reason : '';
-                    return back()->with('error', 'Pendaftaran akun Anda DITOLAK.' . $reason);
+                    $reason = $user->rejection_reason ? ' Alasan: '.$user->rejection_reason : '';
+
+                    return back()->with('error', 'Pendaftaran akun Anda DITOLAK.'.$reason);
                 }
             }
 
             $request->session()->regenerate();
-            return $this->redirectBasedOnRole($user)->with('success', 'Selamat datang kembali, ' . $user->name . '!');
+
+            return $this->redirectBasedOnRole($user)->with('success', 'Selamat datang kembali, '.$user->name.'!');
         }
 
         return back()->withInput($request->only('email', 'remember'))->withErrors([
@@ -59,6 +76,10 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Menampilkan form registrasi mandiri pengguna
+     * US 13: Registrasi mandiri HANYA untuk pengguna (mahasiswa/dosen/staf/umum), petugas DILARANG registrasi mandiri
+     */
     public function showRegister(): View|RedirectResponse
     {
         if (Auth::check()) {
@@ -68,6 +89,11 @@ class AuthController extends Controller
         return view('auth.register');
     }
 
+    /**
+     * Proses registrasi mandiri pengguna
+     * US 13: Peran otomatis disetel sebagai 'pengguna' (Petugas tidak bisa registrasi mandiri)
+     * US 15: Menyiapkan akun pengguna terdaftar
+     */
     public function register(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -88,6 +114,7 @@ class AuthController extends Controller
             'password.confirmed' => 'Konfirmasi kata sandi tidak cocok.',
         ]);
 
+        // US 13 & US 15: Role terkunci ke 'pengguna' dengan status awal 'pending' menunggu verifikasi Admin
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -96,15 +123,18 @@ class AuthController extends Controller
             'user_type' => $validated['user_type'],
             'identity_number' => $validated['identity_number'],
             'phone' => $validated['phone'],
-            'status' => 'verified', // Akun langsung aktif & siap login ke dashboard
-            'email_verified_at' => now(),
+            'status' => 'pending', // Wajib diverifikasi oleh Administrator sebelum dapat digunakan untuk login
+            'email_verified_at' => null,
         ]);
 
         return redirect()->route('login')
             ->withInput(['email' => $validated['email']])
-            ->with('success', 'Pendaftaran akun mandiri berhasil! Akun Anda telah terdaftar dan aktif. Silakan masukkan kata sandi Anda dan klik Masuk untuk langsung mengakses Dashboard.');
+            ->with('warning', 'Pendaftaran akun mandiri berhasil! Akun Anda saat ini berstatus MENUNGGU VERIFIKASI dari Administrator Kampus. Harap tunggu hingga Admin memverifikasi akun Anda sebelum dapat masuk ke sistem.');
     }
 
+    /**
+     * Logout pengguna
+     */
     public function logout(Request $request): RedirectResponse
     {
         Auth::logout();
@@ -114,6 +144,9 @@ class AuthController extends Controller
         return redirect()->route('login')->with('info', 'Anda telah berhasil keluar dari sistem.');
     }
 
+    /**
+     * Redirect dashboard sesuai role pengguna
+     */
     protected function redirectBasedOnRole(User $user): RedirectResponse
     {
         return match ($user->role) {

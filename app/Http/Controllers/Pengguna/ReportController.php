@@ -11,8 +11,19 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
+/**
+ * ReportController (Pengguna)
+ *
+ * Terkait User Story:
+ * - US 6: Melaporkan kerusakan/masalah fasilitas tertentu (kategori, deskripsi, foto)
+ * - US 7: Melihat status dan detail laporan kerusakan yang diajukan
+ */
 class ReportController extends Controller
 {
+    /**
+     * Riwayat dan Status Laporan Kerusakan Pengguna
+     * US 7: Melihat daftar status laporan kerusakan (baru, diproses, selesai, ditolak)
+     */
     public function index(Request $request): View
     {
         $query = DamageReport::with(['facility', 'handler'])
@@ -27,6 +38,10 @@ class ReportController extends Controller
         return view('pengguna.reports.index', compact('reports'));
     }
 
+    /**
+     * Form Laporan Kerusakan Fasilitas
+     * US 6: Pengguna memilih fasilitas dan mengisi kategori masalah
+     */
     public function create(Request $request): View
     {
         $facilities = Facility::where('status', '!=', 'nonaktif')->orderBy('name', 'asc')->get();
@@ -43,6 +58,10 @@ class ReportController extends Controller
         return view('pengguna.reports.create', compact('facilities', 'selectedFacilityId', 'categories'));
     }
 
+    /**
+     * Simpan Laporan Kerusakan Baru
+     * US 6: Mengunggah laporan kerusakan dengan kategori, deskripsi detail, dan bukti foto
+     */
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -64,7 +83,7 @@ class ReportController extends Controller
             $photoPath = $request->file('photo')->store('reports', 'public');
         }
 
-        $reportCode = 'REP-' . date('Ymd') . '-' . strtoupper(Str::random(5));
+        $reportCode = 'REP-'.date('Ymd').'-'.strtoupper(Str::random(5));
 
         $report = DamageReport::create([
             'report_code' => $reportCode,
@@ -77,9 +96,13 @@ class ReportController extends Controller
         ]);
 
         return redirect()->route('pengguna.reports.show', $report)
-            ->with('success', 'Laporan kerusakan berhasil dikirim dengan nomor ' . $reportCode . '. Petugas operasional akan segera menindaklanjuti.');
+            ->with('success', 'Laporan kerusakan berhasil dikirim dengan nomor '.$reportCode.'. Petugas operasional akan segera menindaklanjuti.');
     }
 
+    /**
+     * Detail Laporan Kerusakan & Catatan Resolusi Petugas
+     * US 7: Pengguna melihat detail status dan resolusi laporan saat selesai
+     */
     public function show(DamageReport $report): View
     {
         if ($report->user_id !== Auth::id()) {
