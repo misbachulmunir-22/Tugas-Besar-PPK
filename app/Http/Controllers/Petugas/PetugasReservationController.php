@@ -11,6 +11,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
+/**
+ * PetugasReservationController
+ *
+ * Terkait User Story:
+ * - US 8: Petugas melihat antrian reservasi yang masih menunggu diproses
+ * - US 9: Petugas menyetujui/menolak reservasi secara manual, sistem mencegah bentrok jadwal otomatis
+ * - US 10: Petugas membatalkan reservasi yang sudah disetujui dalam kondisi mendesak dengan alasan pembatalan
+ */
 class PetugasReservationController extends Controller
 {
     protected ReservationService $reservationService;
@@ -20,6 +28,10 @@ class PetugasReservationController extends Controller
         $this->reservationService = $reservationService;
     }
 
+    /**
+     * Antrian dan Daftar Reservasi Petugas
+     * US 8: Menampilkan antrian reservasi dan filter status/fasilitas/tanggal
+     */
     public function index(Request $request): View
     {
         $query = Reservation::with(['user', 'facility', 'approver']);
@@ -40,11 +52,11 @@ class PetugasReservationController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('reservation_code', 'like', "%{$search}%")
-                  ->orWhere('purpose', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($u) use ($search) {
-                      $u->where('name', 'like', "%{$search}%")
-                        ->orWhere('identity_number', 'like', "%{$search}%");
-                  });
+                    ->orWhere('purpose', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($u) use ($search) {
+                        $u->where('name', 'like', "%{$search}%")
+                            ->orWhere('identity_number', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -54,18 +66,22 @@ class PetugasReservationController extends Controller
         return view('petugas.reservations.index', compact('reservations', 'facilities'));
     }
 
+    /**
+     * Persetujuan Reservasi oleh Petugas
+     * US 9: Menyetujui reservasi secara manual & sistem mencegah persetujuan jika bentrok jadwal pada fasilitas sama
+     */
     public function approve(Reservation $reservation): RedirectResponse
     {
         if ($reservation->status !== 'menunggu') {
             return back()->with('error', 'Hanya permohonan reservasi berstatus "Menunggu" yang dapat disetujui.');
         }
 
-        // Cek status fasilitas
+        // US 9: Cek status operasional fasilitas
         if ($reservation->facility->status !== 'aktif') {
-            return back()->with('error', 'Persetujuan gagal! Fasilitas "' . $reservation->facility->name . '" saat ini berstatus: ' . $reservation->facility->status . '.');
+            return back()->with('error', 'Persetujuan gagal! Fasilitas "'.$reservation->facility->name.'" saat ini berstatus: '.$reservation->facility->status.'.');
         }
 
-        // PENCEGAHAN BENTROK JADWAL OTOMATIS:
+        // US 9: PENCEGAHAN BENTROK JADWAL OTOMATIS:
         // Cek apakah ada jadwal lain yang sudah disetujui pada fasilitas, tanggal, dan rentang waktu yang sama
         if ($this->reservationService->hasConflict(
             $reservation->facility_id,
@@ -84,9 +100,13 @@ class PetugasReservationController extends Controller
             'rejection_reason' => null,
         ]);
 
-        return back()->with('success', 'Reservasi ' . $reservation->reservation_code . ' berhasil DISETUJUI.');
+        return back()->with('success', 'Reservasi '.$reservation->reservation_code.' berhasil DISETUJUI.');
     }
 
+    /**
+     * Penolakan Reservasi oleh Petugas
+     * US 9: Menolak reservasi secara manual beserta alasan penolakan
+     */
     public function reject(Request $request, Reservation $reservation): RedirectResponse
     {
         $request->validate([
@@ -103,9 +123,13 @@ class PetugasReservationController extends Controller
             'approved_at' => now(),
         ]);
 
-        return back()->with('success', 'Reservasi ' . $reservation->reservation_code . ' berhasil DITOLAK.');
+        return back()->with('success', 'Reservasi '.$reservation->reservation_code.' berhasil DITOLAK.');
     }
 
+    /**
+     * Pembatalan Darurat oleh Petugas
+     * US 10: Membatalkan reservasi yang sudah disetujui dalam kondisi mendesak dengan alasan pembatalan
+     */
     public function emergencyCancel(Request $request, Reservation $reservation): RedirectResponse
     {
         $request->validate([
@@ -120,6 +144,6 @@ class PetugasReservationController extends Controller
             'cancellation_reason' => $request->cancellation_reason,
         ]);
 
-        return back()->with('success', 'Reservasi ' . $reservation->reservation_code . ' telah DIBATALKAN oleh Petugas karena alasan mendesak.');
+        return back()->with('success', 'Reservasi '.$reservation->reservation_code.' telah DIBATALKAN oleh Petugas karena alasan mendesak.');
     }
 }

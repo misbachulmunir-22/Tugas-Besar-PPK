@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountVerified;
+use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,16 +18,23 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(function () {
             $user = auth()->user();
             if ($user) {
-                if ($user->isAdmin()) return route('admin.dashboard');
-                if ($user->isPetugas()) return route('petugas.dashboard');
-                if ($user->isPengguna()) return route('pengguna.dashboard');
+                if ($user->isAdmin()) {
+                    return route('admin.dashboard');
+                }
+                if ($user->isPetugas()) {
+                    return route('petugas.dashboard');
+                }
+                if ($user->isPengguna()) {
+                    return route('pengguna.dashboard');
+                }
             }
+
             return route('home');
         });
 
         $middleware->alias([
-            'role' => \App\Http\Middleware\RoleMiddleware::class,
-            'verified_account' => \App\Http\Middleware\EnsureAccountVerified::class,
+            'role' => RoleMiddleware::class,
+            'verified_account' => EnsureAccountVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

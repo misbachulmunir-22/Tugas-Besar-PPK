@@ -9,8 +9,21 @@ use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\View\View;
 
+/**
+ * AdminDashboardController
+ *
+ * Terkait User Story:
+ * - US 13 & 14: Pemantauan jumlah akun Petugas dan Pengguna
+ * - US 15: Pemantauan antrian verifikasi pendaftaran akun mandiri
+ * - US 16: Pemantauan total dan status operasional fasilitas kampus
+ * - US 17: Pemantauan ringkasan okupansi reservasi dan statistik kerusakan
+ */
 class AdminDashboardController extends Controller
 {
+    /**
+     * Tampilan Utama Dashboard Administrator
+     * Menyajikan metrik operasional terpadu sistem
+     */
     public function index(): View
     {
         $stats = [
@@ -26,7 +39,9 @@ class AdminDashboardController extends Controller
             'resolved_damage_reports' => DamageReport::where('status', 'selesai')->count(),
         ];
 
+        // US 15: Daftar pengguna yang menunggu verifikasi
         $pendingUsers = User::where('status', 'pending')->latest()->take(5)->get();
+        // US 17: Reservasi dan laporan kerusakan terkini
         $recentReservations = Reservation::with(['user', 'facility'])->latest()->take(5)->get();
         $recentReports = DamageReport::with(['user', 'facility'])->latest()->take(5)->get();
 

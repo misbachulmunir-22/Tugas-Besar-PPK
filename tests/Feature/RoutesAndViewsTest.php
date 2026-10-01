@@ -14,8 +14,11 @@ class RoutesAndViewsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $petugas;
+
     protected User $pengguna;
+
     protected Facility $facility;
 
     protected function setUp(): void
